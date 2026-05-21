@@ -173,7 +173,7 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
   return (
     <div className="space-y-1 py-2">
       {links.map((link) => {
-        if (user && !link.roles.includes(user.role)) return null;
+        if (user && !link.roles.includes(user.role) && user.role !== "owner") return null;
         
         const isActive = location.pathname.startsWith(link.path);
         const Icon = link.icon;

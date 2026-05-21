@@ -57,9 +57,17 @@ export default function Expediente() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [isNotaDialogOpen, setIsNotaDialogOpen] = useState(false);
+  const [isConsultaDialogOpen, setIsConsultaDialogOpen] = useState(false);
   const [isRecetaDialogOpen, setIsRecetaDialogOpen] = useState(false);
   const [isVitalsDialogOpen, setIsVitalsDialogOpen] = useState(false);
   const [newContent, setNewContent] = useState("");
+  const [consultaData, setConsultaData] = useState({
+    motivo: "",
+    subjetivo: "",
+    objetivo: "",
+    analisis: "",
+    plan: ""
+  });
   const [vitalsData, setVitalsData] = useState({
     sangre: "",
     peso: "",
@@ -150,20 +158,30 @@ export default function Expediente() {
     }
   };
 
-  const handleAddRecord = async (type: "nota" | "receta") => {
-    if (!user?.clinicId || !id || !newContent.trim()) return;
+  const handleAddRecord = async (type: "nota" | "receta" | "consulta") => {
+    if (!user?.clinicId || !id) return;
     try {
       setIsSubmitting(true);
+      
+      let finalContent = newContent;
+      if (type === "consulta") {
+        finalContent = `Motivo: ${consultaData.motivo}\n\nSubjetivo: ${consultaData.subjetivo}\n\nObjetivo: ${consultaData.objetivo}\n\nAnálisis/Diagnóstico: ${consultaData.analisis}\n\nPlan: ${consultaData.plan}`;
+      }
+      
+      if (!finalContent.trim()) return;
+
       await addDoc(collection(db, "clinics", user.clinicId, "records"), {
         patientId: id,
         type: type,
-        content: newContent,
+        content: finalContent,
         date: new Date().toISOString(),
         authorId: user.id
       });
       setIsNotaDialogOpen(false);
       setIsRecetaDialogOpen(false);
+      setIsConsultaDialogOpen(false);
       setNewContent("");
+      setConsultaData({ motivo: "", subjetivo: "", objetivo: "", analisis: "", plan: "" });
     } catch (e) {
       console.error(e);
     } finally {
@@ -246,6 +264,63 @@ export default function Expediente() {
              <Button variant="outline" onClick={() => setIsVitalsDialogOpen(false)}>Cancelar</Button>
              <Button onClick={() => handleUpdateVitals()} disabled={isSubmitting} className="bg-blue-600">
                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Guardar Datos
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isConsultaDialogOpen} onOpenChange={setIsConsultaDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] h-max max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nueva Consulta (Formato SOAP)</DialogTitle>
+            <DialogDescription>Completa el expediente clínico estructurado para esta consulta.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+             <div className="space-y-2">
+               <Label>Motivo de Consulta</Label>
+               <Input 
+                 placeholder="Ej. Dolor de cabeza persistente..."
+                 value={consultaData.motivo}
+                 onChange={(e) => setConsultaData({...consultaData, motivo: e.target.value})}
+               />
+             </div>
+             <div className="space-y-2">
+               <Label>Subjetivo (Síntomas y comentarios del paciente)</Label>
+               <Textarea 
+                 className="min-h-[80px]"
+                 value={consultaData.subjetivo}
+                 onChange={(e) => setConsultaData({...consultaData, subjetivo: e.target.value})}
+               />
+             </div>
+             <div className="space-y-2">
+               <Label>Objetivo (Exploración física y signos vitales comprobados)</Label>
+               <Textarea 
+                 className="min-h-[80px]"
+                 value={consultaData.objetivo}
+                 onChange={(e) => setConsultaData({...consultaData, objetivo: e.target.value})}
+               />
+             </div>
+             <div className="space-y-2">
+               <Label>Análisis / Diagnóstico (CIE-10 o descripción clínica)</Label>
+               <Textarea 
+                 className="min-h-[80px]"
+                 value={consultaData.analisis}
+                 onChange={(e) => setConsultaData({...consultaData, analisis: e.target.value})}
+               />
+             </div>
+             <div className="space-y-2">
+               <Label>Plan (Tratamiento, estudios, indicaciones)</Label>
+               <Textarea 
+                 className="min-h-[80px]"
+                 value={consultaData.plan}
+                 onChange={(e) => setConsultaData({...consultaData, plan: e.target.value})}
+               />
+             </div>
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsConsultaDialogOpen(false)}>Cancelar</Button>
+             <Button onClick={() => handleAddRecord("consulta")} disabled={isSubmitting} className="bg-blue-600">
+               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Guardar Consulta
              </Button>
           </DialogFooter>
         </DialogContent>
@@ -420,35 +495,40 @@ export default function Expediente() {
 
           <TabsContent value="notas" className="space-y-6 outline-none">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-slate-900">Historial de Notas Clínicas</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Historial de Consultas y Notas</h3>
               {isDoctor && (
-                <Button onClick={() => setIsNotaDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">
-                  <Plus className="mr-2 h-4 w-4" /> Nueva Nota
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => setIsConsultaDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">
+                    <Activity className="mr-2 h-4 w-4" /> Nueva Consulta
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsNotaDialogOpen(true)} className="rounded-xl shadow-sm">
+                    <Plus className="mr-2 h-4 w-4" /> Nota Simple
+                  </Button>
+                </div>
               )}
             </div>
 
             <div className="space-y-4">
-              {notas.length === 0 ? (
+              {notas.length === 0 && records.filter(r => r.type === "consulta").length === 0 ? (
                 <div className="text-center py-12 text-slate-500 border rounded-2xl bg-white border-slate-200">
-                  No hay notas registradas.
+                  No hay consultas ni notas registradas.
                 </div>
               ) : (
-                notas.map(nota => (
+                records.filter(r => r.type === "nota" || r.type === "consulta").map(nota => (
                   <Card key={nota.id} className="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
                     <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex justify-between items-center">
                       <div className="flex items-center gap-3">
-                        <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm text-blue-600">
-                          <FileText className="h-5 w-5" />
+                        <div className={`bg-white p-2 rounded-lg border border-slate-200 shadow-sm ${nota.type === 'consulta' ? 'text-indigo-600' : 'text-blue-600'}`}>
+                          {nota.type === 'consulta' ? <Activity className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                         </div>
                         <div>
-                          <h4 className="font-semibold text-slate-900">Nota Libre</h4>
+                          <h4 className="font-semibold text-slate-900">{nota.type === 'consulta' ? 'Consulta Médica' : 'Nota Libre'}</h4>
                           <p className="text-xs text-slate-500">{new Date(nota.date).toLocaleString()}</p>
                         </div>
                       </div>
                     </div>
                     <CardContent className="p-6">
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{nota.content}</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{nota.content}</p>
                     </CardContent>
                   </Card>
                 ))

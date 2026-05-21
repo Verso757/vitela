@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, query, addDoc } from "firebase/firestore";
@@ -260,6 +261,17 @@ export default function PacientesList() {
                             <Link to={`/pacientes/${paciente.id}`} className="cursor-pointer w-full">Ver Expediente</Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem>Agendar Cita</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => {
+                            const url = window.location.origin + `/portal/${user.clinicId}/${paciente.id}`;
+                            navigator.clipboard.writeText(url);
+                            toast.success("Link del portal copiado al portapapeles");
+                          }}>
+                            Copiar link del Portal
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => window.open(`/portal/${user?.clinicId}/${paciente.id}`, '_blank')}>
+                            Ver Portal del Paciente
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {user?.role === "owner" && (
                             <DropdownMenuItem>Generar Receta</DropdownMenuItem>
