@@ -73,7 +73,7 @@ export default function DashboardLayout() {
               </Avatar>
               <div className="flex flex-col flex-1 min-w-0">
                 <span className="text-sm font-medium leading-none truncate text-slate-900">{user?.name}</span>
-                <span className="text-xs text-slate-500 mt-1 truncate capitalize">{user?.role === "doctor" ? "Doctor" : "Asistente"}</span>
+                <span className="text-xs text-slate-500 mt-1 truncate capitalize">{user?.role === "doctor" ? "Doctor" : user?.role === "owner" ? "Propietario / Admin" : "Asistente"}</span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 rounded-xl shadow-lg border-slate-200">

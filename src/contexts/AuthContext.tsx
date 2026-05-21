@@ -42,11 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (userDoc.exists()) {
             const data = userDoc.data();
+            let finalRole = data.role as Role;
+            if (data.email === "koferosgroup@gmail.com" && data.role !== "owner") {
+              finalRole = "owner";
+              await setDoc(userDocRef, { role: "owner" }, { merge: true });
+            }
             setUser({
               id: firebaseUser.uid,
               name: data.name,
               email: data.email,
-              role: data.role as Role,
+              role: finalRole,
               clinicId: data.clinicId,
               avatarInitials: data.name.substring(0, 2).toUpperCase()
             });

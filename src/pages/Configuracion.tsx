@@ -35,14 +35,17 @@ export default function Configuracion() {
 
   useEffect(() => {
     async function loadData() {
-      if (!user?.uid || !user?.clinicId) return;
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.id));
         if (userDoc.exists()) {
           const d = userDoc.data();
           setProfile({
-            ...profile,
             name: d.name || "",
+            lastName: d.lastName || "",
             specialty: d.specialty || "",
             cedulaProfesional: d.cedulaProfesional || "",
             cedulaEspecialidad: d.cedulaEspecialidad || "",
@@ -50,15 +53,17 @@ export default function Configuracion() {
           });
         }
 
-        const clinicDoc = await getDoc(doc(db, "clinics", user.clinicId));
-        if (clinicDoc.exists()) {
-          const c = clinicDoc.data();
-          setClinic({
-            name: c.name || "",
-            rfc: c.rfc || "",
-            regimen: c.regimen || "",
-            address: c.address || ""
-          });
+        if (user.clinicId) {
+          const clinicDoc = await getDoc(doc(db, "clinics", user.clinicId));
+          if (clinicDoc.exists()) {
+            const c = clinicDoc.data();
+            setClinic({
+              name: c.name || "",
+              rfc: c.rfc || "",
+              regimen: c.regimen || "",
+              address: c.address || ""
+            });
+          }
         }
       } catch (err) {
         console.error(err);
@@ -71,22 +76,24 @@ export default function Configuracion() {
   }, [user]);
 
   const handleSave = async () => {
-    if (!user?.uid || !user?.clinicId) return;
+    if (!user?.id) return;
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, "users", user.uid), {
+      await updateDoc(doc(db, "users", user.id), {
         name: profile.name,
         specialty: profile.specialty,
         cedulaProfesional: profile.cedulaProfesional,
         cedulaEspecialidad: profile.cedulaEspecialidad,
       });
 
-      await updateDoc(doc(db, "clinics", user.clinicId), {
-        name: clinic.name,
-        rfc: clinic.rfc,
-        regimen: clinic.regimen,
-        address: clinic.address
-      });
+      if (user.clinicId) {
+        await updateDoc(doc(db, "clinics", user.clinicId), {
+          name: clinic.name,
+          rfc: clinic.rfc,
+          regimen: clinic.regimen,
+          address: clinic.address
+        });
+      }
       
       toast.success("Configuración guardada exitosamente");
     } catch(err) {
