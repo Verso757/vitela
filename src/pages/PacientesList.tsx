@@ -257,8 +257,8 @@ export default function PacientesList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-200">
                           <DropdownMenuLabel>Opciones</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            <Link to={`/pacientes/${paciente.id}`} className="cursor-pointer w-full">Ver Expediente</Link>
+                          <DropdownMenuItem render={<Link to={`/pacientes/${paciente.id}`} className="cursor-pointer w-full" />}>
+                            Ver Expediente
                           </DropdownMenuItem>
                           <DropdownMenuItem>Agendar Cita</DropdownMenuItem>
                           <DropdownMenuSeparator />

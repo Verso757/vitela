@@ -92,6 +92,11 @@ service cloud.firestore {
           && (!data.keys().hasAny(['specialty']) || (data.specialty is string && data.specialty.size() <= 100));
     }
 
+    match /demo_requests/{requestId} {
+      allow create: if true;
+      allow get, list, update, delete: if isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner";
+    }
+
     match /users/{userId} {
       allow get: if isSignedIn() && userId == request.auth.uid;
       allow list: if false; // Users can only be gotten individually

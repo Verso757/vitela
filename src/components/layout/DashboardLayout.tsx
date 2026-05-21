@@ -13,7 +13,8 @@ import {
   LogOut,
   User as UserIcon,
   Loader2,
-  Package
+  Package,
+  Target
 } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -167,6 +168,7 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
     { name: "Inventario", path: "/inventario", icon: Package, roles: ["doctor", "admin"] },
     { name: "Aseguradoras", path: "/aseguradoras", icon: ShieldAlert, roles: ["doctor", "admin"] },
     { name: "Reportes", path: "/reportes", icon: PieChart, roles: ["doctor", "admin"] },
+    { name: "Prospectos (Leads)", path: "/prospectos", icon: Target, roles: ["owner"] },
     { name: "Configuración", path: "/configuracion", icon: Settings, roles: ["doctor", "admin"] },
   ];
 

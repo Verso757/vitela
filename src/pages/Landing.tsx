@@ -1,4 +1,4 @@
-import * as React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { 
   ArrowRight, 
@@ -10,13 +10,51 @@ import {
   Smartphone, 
   Stethoscope,
   BarChart,
-  Users
+  Users,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { db } from "../lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function Landing() {
   const { user } = useAuth();
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    clinic: ""
+  });
+
+  const handleDemoRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await addDoc(collection(db, "demo_requests"), {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        clinic: formData.clinic,
+        status: "pending",
+        createdAt: serverTimestamp()
+      });
+      toast.success("¡Solicitud enviada! Nos pondremos en contacto pronto.");
+      setDemoOpen(false);
+      setFormData({ name: "", email: "", phone: "", clinic: "" });
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al enviar la solicitud.");
+    } finally {
+      setLoading(false);
+    }
+  };
   
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 selection:text-blue-900">
@@ -79,9 +117,41 @@ export default function Landing() {
                 Comenzar prueba gratis <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             )}
-            <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-2xl bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
-              Solicitar una demostración
-            </Button>
+            <Dialog open={demoOpen} onOpenChange={setDemoOpen}>
+              <DialogTrigger render={<Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-2xl bg-white text-slate-700 border-slate-200 hover:bg-slate-50" />}>
+                Solicitar una demostración
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Solicitar Demostración</DialogTitle>
+                  <DialogDescription>
+                    Déjanos tus datos y un especialista se pondrá en contacto contigo para mostrarte el sistema.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleDemoRequest} className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nombre completo</Label>
+                    <Input id="name" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Ej. Dr. Juan Pérez" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Correo electrónico</Label>
+                    <Input id="email" type="email" required value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="juan@ejemplo.com" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono de contacto</Label>
+                    <Input id="phone" type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} placeholder="55 1234 5678" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clinic">Puesto o Especialidad</Label>
+                    <Input id="clinic" required value={formData.clinic} onChange={(e) => setFormData({...formData, clinic: e.target.value})} placeholder="Ej. Cardiólogo / Administrador" />
+                  </div>
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enviar Solicitud
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
           <p className="text-sm text-slate-500 mt-4">14 días gratis • Sin tarjeta de crédito • Cancela cuando quieras</p>
         </div>
