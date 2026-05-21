@@ -1,0 +1,46 @@
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import DashboardLayout from "./components/layout/DashboardLayout";
+import Dashboard from "./pages/Dashboard";
+import PacientesList from "./pages/PacientesList";
+import Expediente from "./pages/Expediente";
+import Agenda from "./pages/Agenda";
+import ReservaPublica from "./pages/ReservaPublica";
+import Facturacion from "./pages/Facturacion";
+import Aseguradoras from "./pages/Aseguradoras";
+import Reportes from "./pages/Reportes";
+import Configuracion from "./pages/Configuracion";
+import Login from "./pages/Login";
+import Landing from "./pages/Landing";
+import PortalPaciente from "./pages/PortalPaciente";
+import RecetaPrint from "./pages/RecetaPrint";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "./contexts/AuthContext";
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/print/receta/:clinicId/:patientId/:recordId" element={<RecetaPrint />} />
+          
+          <Route element={<DashboardLayout />}>
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="pacientes" element={<PacientesList />} />
+            <Route path="pacientes/:id" element={<Expediente />} />
+            <Route path="agenda" element={<Agenda />} />
+            <Route path="facturacion" element={<Facturacion />} />
+            <Route path="aseguradoras" element={<Aseguradoras />} />
+            <Route path="reportes" element={<Reportes />} />
+            <Route path="configuracion" element={<Configuracion />} />
+          </Route>
+          
+          <Route path="/reserva/:doctorId" element={<ReservaPublica />} />
+          <Route path="/portal/:clinicId/:patientId" element={<PortalPaciente />} />
+        </Routes>
+        <Toaster />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

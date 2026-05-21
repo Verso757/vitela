@@ -1,0 +1,555 @@
+import { useParams, Link } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { ArrowLeft, User as UserIcon, Activity, FileText, Pill, Calendar, Upload, Plus, AlertCircle, FileDigit, MessageCircle, Loader2, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "../contexts/AuthContext";
+import { db } from "../lib/firebase";
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+
+// ... existing code down to records ...
+interface Paciente {
+  id: string;
+  name: string;
+  edad: number;
+  sexo: string;
+  tel: string;
+  rfc?: string;
+  sangre?: string;
+  peso?: string;
+  altura?: string;
+  presion?: string;
+}
+
+interface RecordEntity {
+  id: string;
+  patientId: string;
+  type: "nota" | "receta";
+  content: string;
+  date: string;
+  authorId: string;
+}
+
+interface Message {
+  id: string;
+  text: string;
+  sender: 'patient' | 'doctor';
+  createdAt: any;
+}
+
+export default function Expediente() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const isDoctor = user?.role === "doctor" || user?.role === "owner";
+
+  const [paciente, setPaciente] = useState<Paciente | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [records, setRecords] = useState<RecordEntity[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [isNotaDialogOpen, setIsNotaDialogOpen] = useState(false);
+  const [isRecetaDialogOpen, setIsRecetaDialogOpen] = useState(false);
+  const [isVitalsDialogOpen, setIsVitalsDialogOpen] = useState(false);
+  const [newContent, setNewContent] = useState("");
+  const [vitalsData, setVitalsData] = useState({
+    sangre: "",
+    peso: "",
+    altura: "",
+    presion: ""
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!user?.clinicId || !id) return;
+
+    const fetchPatient = async () => {
+      try {
+        const patientDoc = await getDoc(doc(db, "clinics", user.clinicId, "patients", id));
+        if (patientDoc.exists()) {
+          setPaciente({ id: patientDoc.id, ...patientDoc.data() } as Paciente);
+        }
+      } catch (error) {
+        console.error("Error fetching patient", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatient();
+
+    const recordsRef = collection(db, "clinics", user.clinicId, "records");
+    const qRecords = query(recordsRef, where("patientId", "==", id));
+    
+    const unsubscribeRecords = onSnapshot(qRecords, (snapshot) => {
+      const data: RecordEntity[] = [];
+      snapshot.forEach(doc => data.push({id: doc.id, ...doc.data()} as RecordEntity));
+      data.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setRecords(data);
+    });
+
+    const messagesRef = collection(db, "clinics", user.clinicId, "patients", id, "messages");
+    const qMessages = query(messagesRef, orderBy("createdAt", "asc"));
+    
+    const unsubscribeMessages = onSnapshot(qMessages, (snapshot) => {
+      const msgs: Message[] = [];
+      snapshot.forEach(doc => msgs.push({id: doc.id, ...doc.data()} as Message));
+      setMessages(msgs);
+    });
+
+    return () => {
+      unsubscribeRecords();
+      unsubscribeMessages();
+    };
+  }, [user?.clinicId, id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !user?.clinicId || !id) return;
+
+    try {
+      await addDoc(collection(db, "clinics", user.clinicId, "patients", id, "messages"), {
+        text: newMessage,
+        sender: 'doctor',
+        createdAt: serverTimestamp()
+      });
+      setNewMessage("");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleUpdateVitals = async () => {
+    if (!user?.clinicId || !id) return;
+    try {
+      setIsSubmitting(true);
+      await updateDoc(doc(db, "clinics", user.clinicId, "patients", id), {
+        sangre: vitalsData.sangre,
+        peso: vitalsData.peso,
+        altura: vitalsData.altura,
+        presion: vitalsData.presion
+      });
+      setPaciente(prev => prev ? { ...prev, ...vitalsData } : prev);
+      setIsVitalsDialogOpen(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddRecord = async (type: "nota" | "receta") => {
+    if (!user?.clinicId || !id || !newContent.trim()) return;
+    try {
+      setIsSubmitting(true);
+      await addDoc(collection(db, "clinics", user.clinicId, "records"), {
+        patientId: id,
+        type: type,
+        content: newContent,
+        date: new Date().toISOString(),
+        authorId: user.id
+      });
+      setIsNotaDialogOpen(false);
+      setIsRecetaDialogOpen(false);
+      setNewContent("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex p-12 justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500"/></div>;
+  }
+
+  if (!paciente) {
+    return <div className="p-12 text-center text-slate-500">Paciente no encontrado.</div>;
+  }
+
+  const notas = records.filter(r => r.type === "nota");
+  const recetas = records.filter(r => r.type === "receta");
+
+  return (
+    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+      {/* Header Profile Section */}
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        <Button variant="ghost" size="icon" className="shrink-0 -ml-2 text-slate-500 hover:text-slate-900" render={<Link to="/pacientes" />} nativeButton={false}>
+            <ArrowLeft className="h-5 w-5" />
+        </Button>
+        
+        <div className="flex-1 min-w-0 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+          <Avatar className="h-20 w-20 ring-4 ring-slate-50">
+            <AvatarFallback className="bg-blue-100 text-blue-700 text-2xl font-semibold">
+              {paciente.name ? paciente.name.substring(0, 2).toUpperCase() : '?'}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">{paciente.name}</h1>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-sm text-slate-600">
+                  <span className="flex items-center gap-1.5"><UserIcon className="h-4 w-4 text-slate-400" /> {paciente.edad} años, {paciente.sexo}</span>
+                  <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-600 border border-slate-200">{paciente.id.substring(0,8)}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button className="bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm">
+                  <Calendar className="mr-2 h-4 w-4" /> Agendar Cita
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={isVitalsDialogOpen} onOpenChange={setIsVitalsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Signos Vitales y Medidas</DialogTitle>
+            <DialogDescription>Actualiza la información médica referencial del paciente.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sangre">Tipo de Sangre</Label>
+                <Input id="sangre" placeholder="Ej. O+" value={vitalsData.sangre} onChange={(e) => setVitalsData({...vitalsData, sangre: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="peso">Peso (kg)</Label>
+                <Input id="peso" placeholder="Ej. 75" value={vitalsData.peso} onChange={(e) => setVitalsData({...vitalsData, peso: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="altura">Altura (cm)</Label>
+                <Input id="altura" placeholder="Ej. 175" value={vitalsData.altura} onChange={(e) => setVitalsData({...vitalsData, altura: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="presion">Presión Arterial</Label>
+                <Input id="presion" placeholder="Ej. 120/80" value={vitalsData.presion} onChange={(e) => setVitalsData({...vitalsData, presion: e.target.value})} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsVitalsDialogOpen(false)}>Cancelar</Button>
+             <Button onClick={() => handleUpdateVitals()} disabled={isSubmitting} className="bg-blue-600">
+               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Guardar Datos
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isNotaDialogOpen} onOpenChange={setIsNotaDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Nueva Nota Clínica</DialogTitle>
+            <DialogDescription>Agrega una nota de evolución, diagnóstico o seguimiento.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+             <Textarea 
+               placeholder="Escribe aquí los detalles clínicos..."
+               className="min-h-[150px]"
+               value={newContent}
+               onChange={(e) => setNewContent(e.target.value)}
+             />
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsNotaDialogOpen(false)}>Cancelar</Button>
+             <Button onClick={() => handleAddRecord("nota")} disabled={isSubmitting} className="bg-blue-600">
+               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Guardar Nota
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRecetaDialogOpen} onOpenChange={setIsRecetaDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Generar Nueva Receta</DialogTitle>
+            <DialogDescription>Prescribe medicamentos e indicaciones.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+             <Textarea 
+               placeholder="Medicamento, Dosis, Frecuencia, Duración..."
+               className="min-h-[150px]"
+               value={newContent}
+               onChange={(e) => setNewContent(e.target.value)}
+             />
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsRecetaDialogOpen(false)}>Cancelar</Button>
+             <Button onClick={() => handleAddRecord("receta")} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+               {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Generar Receta
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="resumen" className="w-full">
+        <TabsList className="bg-transparent border-b border-slate-200 w-full justify-start rounded-none h-auto p-0 space-x-6">
+          <TabsTrigger 
+            value="resumen" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 py-3 px-1 font-medium"
+          >
+            Resumen Clínico
+          </TabsTrigger>
+          <TabsTrigger 
+            value="notas" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 py-3 px-1 font-medium"
+          >
+            Notas Clínicas
+          </TabsTrigger>
+          <TabsTrigger 
+            value="recetas" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 py-3 px-1 font-medium"
+          >
+            Recetas
+          </TabsTrigger>
+          <TabsTrigger 
+            value="chat" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 py-3 px-1 font-medium flex items-center"
+          >
+            <MessageCircle className="w-4 h-4 mr-2" /> Chat <Badge className="ml-2 bg-blue-100 text-blue-700 hover:bg-blue-100 rounded border-none">{messages.length}</Badge>
+          </TabsTrigger>
+        </TabsList>
+        
+        <div className="mt-6">
+          <TabsContent value="resumen" className="space-y-6 outline-none">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Vitals & Info */}
+              <div className="space-y-6">
+                <Card className="rounded-2xl border-slate-200 shadow-sm">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-base font-semibold">Información Personal</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <p className="text-xs text-slate-500">Teléfono</p>
+                      <p className="text-sm font-medium">{paciente.tel || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">RFC (Facturación)</p>
+                      <p className="text-sm font-mono">{paciente.rfc || "N/A"}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl border-slate-200 shadow-sm">
+                  <CardHeader className="pb-4 flex flex-row items-center justify-between">
+                    <CardTitle className="text-base font-semibold">Signos Vitales</CardTitle>
+                    {isDoctor && (
+                      <Button variant="ghost" size="sm" className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => {
+                        setVitalsData({
+                          sangre: paciente.sangre || "",
+                          peso: paciente.peso || "",
+                          altura: paciente.altura || "",
+                          presion: paciente.presion || ""
+                        });
+                        setIsVitalsDialogOpen(true)
+                      }}>
+                        Editar
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <p className="text-xs text-slate-500 mb-1">Tipo de Sangre</p>
+                        <p className="font-semibold text-rose-600">{paciente.sangre || "--"}</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <p className="text-xs text-slate-500 mb-1">Peso</p>
+                        <p className="font-semibold text-slate-900">{paciente.peso || "--"}</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <p className="text-xs text-slate-500 mb-1">Altura</p>
+                        <p className="font-semibold text-slate-900">{paciente.altura || "--"}</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <p className="text-xs text-slate-500 mb-1">Presión Ref.</p>
+                        <p className="font-semibold text-slate-900">{paciente.presion || "--"}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Middle/Right Column: Timeline */}
+              <div className="lg:col-span-2 space-y-6">
+                <Card className="rounded-2xl border-slate-200 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base font-semibold">Historial Reciente</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {records.length === 0 ? (
+                      <p className="text-slate-500 text-sm">No hay registros recientes.</p>
+                    ) : (
+                      <div className="relative border-l border-slate-200 ml-3 pl-6 space-y-6">
+                        {records.slice(0, 5).map(record => (
+                          <div className="relative" key={record.id}>
+                            <span className={`absolute -left-[31px] p-1 rounded-full ring-4 ring-white ${record.type === 'nota' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                              {record.type === 'nota' ? <FileText className="h-3 w-3" /> : <Pill className="h-3 w-3" />}
+                            </span>
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-1">
+                              <h4 className="text-sm font-semibold text-slate-900">{record.type === 'nota' ? 'Nota Clínica' : 'Receta Emitida'}</h4>
+                              <span className="text-xs text-slate-500 font-mono">{new Date(record.date).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-sm text-slate-600 mt-2 line-clamp-2">{record.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="notas" className="space-y-6 outline-none">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-slate-900">Historial de Notas Clínicas</h3>
+              {isDoctor && (
+                <Button onClick={() => setIsNotaDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm">
+                  <Plus className="mr-2 h-4 w-4" /> Nueva Nota
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              {notas.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 border rounded-2xl bg-white border-slate-200">
+                  No hay notas registradas.
+                </div>
+              ) : (
+                notas.map(nota => (
+                  <Card key={nota.id} className="rounded-2xl border-slate-200 shadow-sm overflow-hidden">
+                    <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm text-blue-600">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-slate-900">Nota Libre</h4>
+                          <p className="text-xs text-slate-500">{new Date(nota.date).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <CardContent className="p-6">
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{nota.content}</p>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="recetas" className="space-y-6 outline-none">
+            <div className="flex justify-between items-center">
+               <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Recetario y Prescripciones</h3>
+                  <p className="text-sm text-slate-500">Historial de recetas emitidas al paciente</p>
+               </div>
+               {isDoctor && (
+                <Button onClick={() => setIsRecetaDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm">
+                  <FileDigit className="mr-2 h-4 w-4" /> Generar Receta
+                </Button>
+               )}
+            </div>
+
+            <div className="space-y-4">
+              {recetas.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 border rounded-2xl bg-white border-slate-200">
+                  No hay recetas emitidas.
+                </div>
+              ) : (
+                recetas.map(receta => (
+                  <Card key={receta.id} className="rounded-2xl border-slate-200 shadow-sm p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="bg-emerald-50 text-emerald-600 p-3 rounded-xl">
+                         <Pill className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1">
+                         <h4 className="font-semibold text-slate-900">Receta</h4>
+                         <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{receta.content}</p>
+                         <p className="text-xs text-slate-400 mt-2">Emitida el {new Date(receta.date).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" className="shrink-0 text-slate-600 hover:text-blue-600 hover:border-blue-200" onClick={() => window.open(`/print/receta/${user?.clinicId}/${id}/${receta.id}`, '_blank')}>
+                      Imprimir
+                    </Button>
+                  </Card>
+                ))
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="chat" className="space-y-6 outline-none">
+            <Card className="rounded-2xl border-slate-200 shadow-sm flex flex-col h-[500px] overflow-hidden">
+              <CardHeader className="bg-slate-50 border-b border-slate-100 py-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-base font-semibold">Mensajes con Paciente</CardTitle>
+                    <p className="text-xs text-slate-500 mt-1">El paciente puede ver estos mensajes en su portal.</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => window.open(`/portal/${user?.clinicId}/${id}`, '_blank')}>
+                    Ver Portal del Paciente
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 p-0 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 border-b border-slate-100">
+                  {messages.length === 0 ? (
+                    <div className="text-center text-slate-500 mt-10">
+                      <p>No hay mensajes en este chat.</p>
+                      <p className="text-sm mt-1">Envía un mensaje para iniciar la conversación.</p>
+                    </div>
+                  ) : (
+                    messages.map(msg => {
+                      const isDoctorMsg = msg.sender === 'doctor';
+                      return (
+                        <div key={msg.id} className={`flex ${isDoctorMsg ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                            isDoctorMsg 
+                              ? 'bg-blue-600 text-white rounded-br-sm' 
+                              : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm'
+                          }`}>
+                            {msg.text}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={handleSendMessage} className="p-3 bg-white flex gap-2">
+                  <Input 
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    placeholder="Escribe un mensaje al paciente..."
+                    className="rounded-xl flex-1 bg-slate-50 border-slate-200 focus-visible:ring-blue-500"
+                  />
+                  <Button type="submit" disabled={!newMessage.trim()} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white w-12 h-10 p-0 flex items-center justify-center">
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </div>
+      </Tabs>
+    </div>
+  );
+}
