@@ -9,6 +9,7 @@ import Facturacion from "./pages/Facturacion";
 import Aseguradoras from "./pages/Aseguradoras";
 import Reportes from "./pages/Reportes";
 import Configuracion from "./pages/Configuracion";
+import Inventario from "./pages/Inventario";
 import Login from "./pages/Login";
 import Landing from "./pages/Landing";
 import PortalPaciente from "./pages/PortalPaciente";
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="pacientes/:id" element={<Expediente />} />
             <Route path="agenda" element={<Agenda />} />
             <Route path="facturacion" element={<Facturacion />} />
+            <Route path="inventario" element={<Inventario />} />
             <Route path="aseguradoras" element={<Aseguradoras />} />
             <Route path="reportes" element={<Reportes />} />
             <Route path="configuracion" element={<Configuracion />} />

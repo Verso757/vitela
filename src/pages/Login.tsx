@@ -1,12 +1,13 @@
 import * as React from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Activity, Lock, Mail, ChevronRight, User } from "lucide-react";
+import { Activity, Lock, Mail, ChevronRight, User, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useAuth } from "../contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -94,8 +95,16 @@ export default function Login() {
                     try {
                       await loginWithGoogle();
                       navigate("/dashboard");
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error(e);
+                      if (e.message === "popup-closed") {
+                        toast.error("Atención", {
+                           description: "Por seguridad de Google, si estás viendo The AI Studio, debes ABRIR ESTA APP EN UNA PESTAÑA NUEVA (icono arriba a la derecha) para poder iniciar sesión.",
+                           duration: 8000
+                        });
+                      } else {
+                        toast.error("Error al iniciar sesión con Google.");
+                      }
                     } finally {
                       setIsLoading(false);
                     }

@@ -193,6 +193,20 @@ service cloud.firestore {
                       && incoming().diff(existing()).affectedKeys().hasOnly(['content', 'date']);
       }
 
+      match /inventory/{itemId} {
+        allow get: if isClinicMember(clinicId);
+        allow list: if isClinicMember(clinicId);
+        allow create: if isClinicMember(clinicId)
+                      && isValidId(itemId)
+                      && incoming().keys().hasAll(['nombre', 'cantidad', 'minimo', 'categoria'])
+                      && incoming().cantidad is number
+                      && incoming().minimo is number;
+        allow update: if isClinicMember(clinicId)
+                      && incoming().keys().hasAll(['nombre', 'cantidad', 'minimo', 'categoria'])
+                      && incoming().cantidad is number
+                      && incoming().minimo is number;
+      }
+
       match /invoices/{invoiceId} {
         allow get: if isClinicMember(clinicId);
         allow list: if isClinicMember(clinicId);

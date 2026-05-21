@@ -100,8 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user' || error.name === 'FirebaseError') {
+        throw new Error("popup-closed");
+      }
+      throw error;
+    }
   };
 
   const logout = async () => {
