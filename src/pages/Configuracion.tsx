@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, User, Building, Shield, Bell, CreditCard, Loader2 } from "lucide-react";
+import { Save, User, Building, Shield, Bell, CreditCard, Loader2, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, addDoc, writeBatch } from "firebase/firestore";
 
 export default function Configuracion() {
   const { user } = useAuth();
@@ -104,6 +104,46 @@ export default function Configuracion() {
     }
   };
 
+  const handleSeedData = async () => {
+    if (!user?.clinicId) return;
+    try {
+      setIsSaving(true);
+      toast.info("Inyectando datos de prueba...");
+      
+      const clinicRef = doc(db, "clinics", user.clinicId);
+      
+      // Seed Patients
+      const patientsCollection = collection(clinicRef, "patients");
+      const p1 = await addDoc(patientsCollection, { name: "Alejandro Pérez Vázquez", email: "alex.pv@ejemplo.com", phone: "5512345678", dob: "1985-04-12", gender: "Masculino", bloodType: "O+", allergies: "Penicilina", joinDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() });
+      const p2 = await addDoc(patientsCollection, { name: "María Gómez López", email: "maria.g@ejemplo.com", phone: "5587654321", dob: "1992-08-25", gender: "Femenino", bloodType: "A+", allergies: "Ninguna", joinDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString() });
+      const p3 = await addDoc(patientsCollection, { name: "Roberto Torres Díaz", email: "roberto@ejemplo.com", phone: "8111223344", dob: "1978-11-03", gender: "Masculino", bloodType: "B-", allergies: "Ibuprofeno", joinDate: new Date().toISOString() });
+
+      // Seed Inventory
+      const invCollection = collection(clinicRef, "inventory");
+      await addDoc(invCollection, { nombre: "Paracetamol 500mg", sku: "MED-001", cantidad: 120, minimo: 50, categoria: "Medicamentos" });
+      await addDoc(invCollection, { nombre: "Amoxicilina 250mg", sku: "MED-002", cantidad: 15, minimo: 30, categoria: "Antibióticos" });
+      await addDoc(invCollection, { nombre: "Jeringas 5ml", sku: "INS-001", cantidad: 5, minimo: 200, categoria: "Insumos" });
+      await addDoc(invCollection, { nombre: "Gasa estéril", sku: "INS-002", cantidad: 500, minimo: 100, categoria: "Material Curación" });
+
+      // Seed Invoices
+      const invRef = collection(clinicRef, "invoices");
+      await addDoc(invRef, { paciente: "Alejandro Pérez Vázquez", rfc: "PEVA850412H21", monto: 1500, fecha: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), estado: "Timbrada", usoCFDI: "D01 - Honorarios médicos", metodoPago: "PUE" });
+      await addDoc(invRef, { paciente: "María Gómez López", rfc: "GOLM920825XYZ", monto: 900, fecha: new Date().toISOString(), estado: "Pendiente", usoCFDI: "D01 - Honorarios médicos", metodoPago: "PUE" });
+
+      // Seed Records (Consultas P1)
+      const recordsCollection = collection(clinicRef, "records");
+      await addDoc(recordsCollection, { patientId: p1.id, type: "consulta", content: "Motivo: Revisión Anual\n\nSubjetivo: Paciente asintomático.\n\nObjetivo: TA 120/80.\n\nAnálisis/Diagnóstico: Paciente Sano.\n\nPlan: Seguir rutinas alimenticias.", date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), authorId: user.id });
+      await addDoc(recordsCollection, { patientId: p1.id, type: "receta", content: "Paracetamol 500mg - 1 pastilla cada 8 hrs", date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), authorId: user.id });
+      
+      toast.success("¡Datos de prueba inyectados correctamente!");
+    } catch(e) {
+      console.error(e);
+      toast.error("Error al inyectar datos falsos");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex p-10 justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
   }
@@ -134,6 +174,11 @@ export default function Configuracion() {
           <TabsTrigger value="suscripcion" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
              <CreditCard className="w-4 h-4 mr-2" /> Suscripción (SaaS)
           </TabsTrigger>
+          {user?.role === "owner" && (
+            <TabsTrigger value="desarrollo" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+               <Database className="w-4 h-4 mr-2" /> Desarrollador
+            </TabsTrigger>
+          )}
         </TabsList>
         
         <div className="mt-6">
@@ -266,6 +311,28 @@ export default function Configuracion() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {user?.role === "owner" && (
+            <TabsContent value="desarrollo" className="outline-none">
+              <Card className="rounded-2xl border-slate-200 shadow-sm border-amber-100 overflow-hidden">
+                <CardHeader>
+                  <CardTitle className="text-lg">Herramientas de Desarrollador</CardTitle>
+                  <CardDescription>Opciones para realizar pruebas y demostraciones de la funcionalidad del software.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                     <div>
+                       <h4 className="font-semibold text-amber-900">Inyectar Datos Falsos (Demo)</h4>
+                       <p className="text-amber-700 text-sm">Agrega pacientes de prueba, facturas, recetas, y un inventario de 4 medicamentos base.</p>
+                     </div>
+                     <Button onClick={handleSeedData} variant="outline" className="mt-3 md:mt-0 bg-white border-amber-200 text-amber-800 hover:bg-amber-100">
+                        <Database className="w-4 h-4 mr-2" /> Poblar Base de Datos
+                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </div>
       </Tabs>
     </div>
